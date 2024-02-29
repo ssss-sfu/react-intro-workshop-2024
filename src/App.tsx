@@ -2,13 +2,6 @@ import { useEffect, useState } from "react";
 
 type PlayState = "start" | "playing" | "end";
 
-type PlayerResults = {
-  question: string;
-  options: string[];
-  correctAnswer: string;
-  playerAnswer: string;
-};
-
 function App() {
   const [playState, setPlayState] = useState<PlayState>("start");
   const updatePlayStateToPlaying = () => setPlayState("playing");
@@ -56,10 +49,9 @@ function Start({
   );
 }
 
-type QuestionsApi = {
+type QuestionResponce = {
   response_code: number;
   results: {
-    type: "multiple" | "boolean";
     question: string;
     correct_answer: string;
     incorrect_answers: string[];
@@ -72,6 +64,10 @@ type Question = {
   correctAnswer: string;
 };
 
+type PlayerResults = Question & {
+  playerAnswer: string;
+};
+
 function Playing({
   setPlayerResults,
   updatePlayStateToEnd,
@@ -81,13 +77,13 @@ function Playing({
   updatePlayStateToStart: () => void;
   updatePlayStateToEnd: () => void;
 }) {
-  const [questionRes, setQuestionsRes] = useState<Question[] | null>(null);
+  const [questions, setQuestions] = useState<Question[] | null>(null);
   useEffect(() => {
     fetch("https://opentdb.com/api.php?amount=5")
       .then((res) => {
         return res.json();
       })
-      .then((data: QuestionsApi) => {
+      .then((data: QuestionResponce) => {
         if (data.response_code !== 0) {
           return;
         }
@@ -95,6 +91,7 @@ function Playing({
           ({ question, correct_answer, incorrect_answers }) => {
             const options = incorrect_answers;
             options.splice(randomIndex(options.length), 0, correct_answer);
+            // Use dom parser to decode html entities
             const domParser = new DOMParser();
             const parsedQuestion = domParser.parseFromString(
               question,
@@ -111,18 +108,20 @@ function Playing({
             };
           },
         );
-        setQuestionsRes(res);
+        setQuestions(res);
       })
       .catch((err) => console.error(err));
   }, []);
 
-  if (!questionRes) return <div>Loading...</div>;
+  if (!questions) return <div>Loading...</div>;
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!questionRes) return;
+    if (!questions) return;
+    // Example of using FormData to extract field values from a form
+    // https://developer.mozilla.org/en-US/docs/Web/API/HTMLFormElement/formdata_event
     const formData = new FormData(e.currentTarget);
-    const playerResults: PlayerResults[] = questionRes.map((question) => {
+    const playerResults: PlayerResults[] = questions.map((question) => {
       return {
         ...question,
         playerAnswer: formData.get(question.question) as string,
@@ -135,7 +134,7 @@ function Playing({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <ul className="space-y-4">
-        {questionRes.map(({ options, question }) => {
+        {questions.map(({ options, question }) => {
           return (
             <li key={question}>
               <h2 className="text-xl">{question}</h2>
@@ -195,11 +194,7 @@ function End({
                       <label
                         className={`${!isCorrect && isPlayerAnswer ? "bg-red-400" : ""} ${isCorrect ? "bg-green-400" : ""}`}
                       >
-                        <input
-                          type="radio"
-                          disabled
-                          checked={option === result.playerAnswer}
-                        />
+                        <input type="radio" disabled checked={isPlayerAnswer} />
                         {option}
                       </label>
                       {isCorrect && !isPlayerAnswer && (
